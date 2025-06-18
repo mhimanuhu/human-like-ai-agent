@@ -15,8 +15,11 @@ if (!fs.existsSync(audioDir)) {
 
 // Texts to generate
 const audioTexts = {
-  welcome: 'Namaskar ji! Main aapki aaj kya sahayta kr skta hu? .',
-  filler: 'Ji bilkul, nischint rahiye. Aapki poori sahayata ki jaayegi.'
+  welcome: 'Namaskar ji! Customer care m aapka swagat hai, Main aapki aaj kya sahayta kr skta hu? .',
+  filler: 'Ji bilkul, nischint rahiye. Aapki poori sahayta ki jaayegi.',
+  followup: 'Aap kuch or jaan na chahte hai?',
+  relisten: 'Maaf kijiye, main aapki baat nahi samaj paya, kripya dubara samjhane ki kripa kare',
+  sorry: 'Maaf kijiye, main aapki sahayta krne m asmarth hu',
 };
 
 // TTS function

@@ -14,32 +14,52 @@ const port = 3000;
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// Serve audio files from /audio directory
+// Serve audio files
 app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
-// checks /audio folder exists
+// Ensure /audio exists
 const audioDir = path.join(__dirname, 'audio');
 if (!fs.existsSync(audioDir)) {
   fs.mkdirSync(audioDir);
 }
 
-// Gemini setup
+// Gemini AI setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-// ElevenLabs config
+// ElevenLabs setup
 const elevenApiKey = process.env.ELEVENLABS_API_KEY;
-const voiceId = process.env.ELEVENLABS_VOICE_ID || 'RABOvaPec1ymXz02oDQi'; // default voice
+const voiceId = process.env.ELEVENLABS_VOICE_ID || 'RABOvaPec1ymXz02oDQi';
 
-// Initial voice entry
+// Ngrok URL
+const Ngrok_host = "https://088e-27-0-216-5.ngrok-free.app";
+
+// In-memory conversation store
+const sessionHistory = {};
+
+// Initial entrypoint — only plays welcome once
 app.post('/voice', (req, res) => {
   const twiml = `
     <Response>
-      <Play>https://1cd2-27-0-216-64.ngrok-free.app/audio/welcome.mp3</Play>
-      <Gather input="speech" speechTimeout="auto" action="/process" method="POST">
+      <Play>${Ngrok_host}/audio/welcome.mp3</Play>
+      <Gather input="speech" speechTimeout="auto" action="/process" method="POST" />
+      <Play>${Ngrok_host}/audio/relisten.mp3</Play>
+      <Gather input="speech" speechTimeout="auto" action="/process" method="POST" />
+      <Play>${Ngrok_host}/audio/sorry.mp3</Play>
+    </Response>
+  `;
+  res.type('text/xml').send(twiml);
+});
 
-      </Gather> 
-      <Say language="en-IN" voice="Polly.Raveena">Maaf kijiye, main sun nahi paya. Dhanyavaad!</Say>
+// Continue conversation without repeating welcome
+app.post('/continue', (req, res) => {
+  const twiml = `
+    <Response>
+      <Gather input="speech" speechTimeout="auto" action="/process" method="POST">
+      </Gather>
+      <Play>${Ngrok_host}/audio/relisten.mp3</Play>
+      <Gather input="speech" speechTimeout="auto" action="/process" method="POST" />
+      <Play>${Ngrok_host}/audio/sorry.mp3</Play>
     </Response>
   `;
   res.type('text/xml').send(twiml);
@@ -48,27 +68,39 @@ app.post('/voice', (req, res) => {
 // AI + TTS processing
 app.post('/process', async (req, res) => {
   const userSpeech = req.body.SpeechResult;
-  console.log('🗣️ You said:', userSpeech);
+  const userNumber = req.body.To || 'Unknown';
+  const callSid = req.body.CallSid || 'no-call-id';
+
+  console.log(`📞 Customer Number: ${userNumber} | 🗣️ You said:`, userSpeech);
 
   if (!userSpeech || userSpeech.trim() === '') {
     return res.type('text/xml').send(`
       <Response>
-        <Say>Sorry, I didn't hear anything. Please try again.</Say>
-        <Redirect>/voice</Redirect>
+        <Play>${Ngrok_host}/audio/relisten.mp3</Play>
+        <Redirect>/continue</Redirect>
       </Response>
     `);
   }
 
   try {
-    // Generate response
-    const prompt = `You are a helpful Hindi-English speaking customer support assistant. Answer this query clearly in Hinglish. Be straight to the point, keep your reply minimal:"${userSpeech}"`;
-    const result = await model.generateContent(prompt);
+    //  conversation history
+    if (!sessionHistory[callSid]) sessionHistory[callSid] = [];
+    sessionHistory[callSid].push({ role: 'user', content: userSpeech });
+
+    const fullPrompt = sessionHistory[callSid]
+      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      .join('\n');
+
+    const finalPrompt = `You are a helpful Hinglish-speaking customer support assistant. Keep replies short, polite, respectful, human-like and relevant and with well punctuations.\n${fullPrompt}\nAssistant:`;
+
+    const result = await model.generateContent(finalPrompt);
     const reply = result.response.text().trim();
     console.log('🤖 Gemini:', reply);
 
-    // TTS audio using ElevenLabs
-    const audioPath = path.join(__dirname, 'audio', 'response.mp3');
+    sessionHistory[callSid].push({ role: 'assistant', content: reply });
 
+    // Convert reply to speech
+    const audioPath = path.join(__dirname, 'audio', 'response.mp3');
     const ttsResponse = await axios({
       method: 'POST',
       url: `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
@@ -94,14 +126,16 @@ app.post('/process', async (req, res) => {
       writer.on('error', reject);
     });
 
-    // Send TwiML with <Play> tag
+    // Speak response and follow up, then redirect to /continue
     const twiml = `
       <Response>
-    <Play>https://1cd2-27-0-216-64.ngrok-free.app/audio/filler.mp3</Play>
-    <Pause length="1"/>
-    <Play> https://1cd2-27-0-216-64.ngrok-free.app/audio/response.mp3</Play>
-    <Redirect>/voice</Redirect>
-    </Response>
+        <Play>${Ngrok_host}/audio/filler.mp3</Play>
+        <Pause length="1"/>
+        <Play>${Ngrok_host}/audio/response.mp3</Play>
+        <Pause length="1"/>
+        <Play>${Ngrok_host}/audio/followup.mp3</Play>
+        <Redirect>/continue</Redirect>
+      </Response>
     `;
     res.type('text/xml').send(twiml);
 
@@ -109,7 +143,7 @@ app.post('/process', async (req, res) => {
     console.error('❌ Error:', err.message || err);
     res.type('text/xml').send(`
       <Response>
-        <Say>Sorry, I encountered an error while processing. Please try again later.</Say>
+        <Play>${Ngrok_host}/audio/sorry.mp3</Play>
       </Response>
     `);
   }
