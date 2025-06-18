@@ -39,12 +39,13 @@ This creates a near-human experience and can be extended for customer care, rece
 ## 📁 Project Structure
 
 human-like-ai-agent/
-├── audio/ # Audio files used during calls
-├── call.js # Script to initiate a call via Twilio
-├── server.js # Express server for handling voice and AI logic
-├── static-audio.js # Script to pre-generate common audio messages
-├── .env # Environment variables (not included)
-├── package.json # Project dependencies
+├── audio/               # Audio files used during calls
+├── call.js              # Script to initiate a call via Twilio
+├── server.js            # Express server for handling voice and AI logic
+├── static-audio.js      # Script to pre-generate common audio messages
+├── .env                 # Environment variables (not included)
+├── package.json         # Project dependencies
+
 
 
 ---
