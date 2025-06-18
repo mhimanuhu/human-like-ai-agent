@@ -66,7 +66,7 @@ cd human-like-ai-agent
 npm install
 ```
 
-### 3. Set up .env dile
+### 3. Set up .env file
 
 Create a .env file in the root directory and fill in the following:
 
